@@ -1,75 +1,80 @@
-provider "aws" {
-    region = "ap-southeast-1"
+locals {
+  allowed_bucket_arn = aws_s3_bucket.this[var.allowed_bucket_suffix].arn
 }
+
+# --- S3 ---
 
 resource "aws_s3_bucket" "this" {
-    for_each = var.bucket_suffixes
-    bucket   = "${var.bucket_prefix}-${each.key}"
+  for_each = var.bucket_suffixes
+  bucket   = "${var.bucket_prefix}-${each.key}"
 }
 
+# --- IAM user ---
+
 resource "aws_iam_user" "this" {
-    name = var.user_name
+  name = var.user_name
 }
 
 resource "aws_iam_access_key" "this" {
-    user = aws_iam_user.this.name
+  user = aws_iam_user.this.name
 }
 
-resource "aws_iam_policy" "example_policy" {
-    name = "ExamplePolicy"
-    description = "IAM policy to S3 access"
+# --- IAM role: user assumes it, role reaches one bucket ---
 
-    policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-            {
-                Effect   = "Allow"
-                Action   = ["s3:ListBucket"]
-                Resource = aws_s3_bucket.this["allowed"].arn
-            },
-            {
-                Effect   = "Allow"
-                Action   = ["s3:GetObject", "s3:PutObject"]
-                Resource = "${aws_s3_bucket.this["allowed"].arn}/*"
-            }
-        ]
-    })
+data "aws_iam_policy_document" "trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [aws_iam_user.this.arn]
+    }
+  }
 }
 
-resource "aws_iam_role" "example_role" {
-    name = "ExampleRole"
+data "aws_iam_policy_document" "s3_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [local.allowed_bucket_arn]
+  }
 
-    assume_role_policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-            {
-                Effect = "Allow"
-                Principal = {
-                    AWS = aws_iam_user.this.arn
-                }
-                Action = "sts:AssumeRole"
-            }
-        ]
-    })
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = ["${local.allowed_bucket_arn}/*"]
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "example_attachment" {
-    role = aws_iam_role.example_role.name
-    policy_arn = aws_iam_policy.example_policy.arn
+resource "aws_iam_role" "this" {
+  name               = var.role_name
+  assume_role_policy = data.aws_iam_policy_document.trust.json
+}
+
+resource "aws_iam_policy" "s3_access" {
+  name        = var.policy_name
+  description = "Access to the ${var.allowed_bucket_suffix} S3 bucket only"
+  policy      = data.aws_iam_policy_document.s3_access.json
+}
+
+resource "aws_iam_role_policy_attachment" "s3_access" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.s3_access.arn
+}
+
+# --- IAM user permission to assume the role ---
+
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    effect    = "Allow"
+    actions   = ["sts:AssumeRole"]
+    resources = [aws_iam_role.this.arn]
+  }
 }
 
 resource "aws_iam_user_policy" "assume_role" {
-    name = "AllowAssumeExampleRole"
-    user = aws_iam_user.this.name
-
-    policy = jsonencode({
-        Version = "2012-10-17"
-        Statement = [
-            {
-                Effect   = "Allow"
-                Action   = "sts:AssumeRole"
-                Resource = aws_iam_role.example_role.arn
-            }
-        ]
-    })
+  name   = "AllowAssume-${var.role_name}"
+  user   = aws_iam_user.this.name
+  policy = data.aws_iam_policy_document.assume_role.json
 }

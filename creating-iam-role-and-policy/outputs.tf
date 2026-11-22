@@ -10,7 +10,7 @@ output "user_name" {
 
 output "role_arn" {
   description = "ARN of the role the user assumes"
-  value       = aws_iam_role.example_role.arn
+  value       = aws_iam_role.this.arn
 }
 
 output "access_key_id" {
