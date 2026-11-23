@@ -20,5 +20,5 @@ output "ssh_bastion" {
 
 output "ssh_private" {
   description = "Command to SSH into the private instance through the bastion"
-  value       = "ssh -i ${path.root}/bastion-key -J ubuntu@${module.ec2.public_ips["bastion"]} ubuntu@${module.ec2.private_ips["private"]}"
+  value       = "ssh -i ${path.root}/bastion-key -o ProxyCommand=\"ssh -i ${path.root}/bastion-key -W %h:%p ubuntu@${module.ec2.public_ips["bastion"]}\" ubuntu@${module.ec2.private_ips["private"]}"
 }
