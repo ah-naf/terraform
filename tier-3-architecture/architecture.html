@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3-Tier VPC Architecture</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --text: #1f2933;
+    --muted: #5f6b7a;
+    --line: #3d4852;
+    --vpc-fill: #fbf9e4;
+    --vpc-stroke: #b5a642;
+    --az-fill: #fbe9dc;
+    --az-stroke: #d9a47a;
+    --public-fill: #d4f3dc;
+    --public-stroke: #4a9d62;
+    --app-fill: #d3e4fb;
+    --app-stroke: #4a7ec2;
+    --data-fill: #e3d9f6;
+    --data-stroke: #7b5cbf;
+    --nat-fill: #ffffff;
+    --nat-stroke: #2f6f4a;
+    --new: #d9480f;
+    --rt-fill: #ffffff;
+    --card: #ffffff;
+    --border: #d9dee5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181d;
+      --text: #e6e9ed;
+      --muted: #9aa5b1;
+      --line: #aab4bf;
+      --vpc-fill: #26261a;
+      --vpc-stroke: #8a7d2e;
+      --az-fill: #2d2219;
+      --az-stroke: #8a6445;
+      --public-fill: #1b3324;
+      --public-stroke: #4fae6b;
+      --app-fill: #1b2a40;
+      --app-stroke: #5b8fd6;
+      --data-fill: #2a2140;
+      --data-stroke: #9277d6;
+      --nat-fill: #14181d;
+      --nat-stroke: #5bbf86;
+      --new: #ff8a4c;
+      --rt-fill: #14181d;
+      --card: #1b2026;
+      --border: #2c343d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; color: var(--muted); }
+  .diagram {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px;
+    overflow-x: auto;
+  }
+  svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: inherit; }
+  .t { fill: var(--text); font-size: 15px; }
+  .t-sm { fill: var(--muted); font-size: 13px; }
+  .t-bold { fill: var(--text); font-size: 15px; font-weight: 600; }
+  .vpc { fill: var(--vpc-fill); stroke: var(--vpc-stroke); stroke-width: 2; }
+  .az { fill: var(--az-fill); stroke: var(--az-stroke); stroke-width: 1.5; }
+  .pub { fill: var(--public-fill); stroke: var(--public-stroke); stroke-width: 2; }
+  .app { fill: var(--app-fill); stroke: var(--app-stroke); stroke-width: 2; }
+  .data { fill: var(--data-fill); stroke: var(--data-stroke); stroke-width: 2; }
+  .nat { fill: var(--nat-fill); stroke: var(--nat-stroke); stroke-width: 2; }
+  .nat-new { fill: var(--nat-fill); stroke: var(--new); stroke-width: 3; }
+  .rt { fill: var(--rt-fill); stroke: var(--line); stroke-width: 1.5; }
+  .igw { fill: var(--rt-fill); stroke: var(--line); stroke-width: 2.5; }
+  .link { fill: none; stroke: var(--line); stroke-width: 1.6; marker-end: url(#arrow); }
+  .link-new { fill: none; stroke: var(--new); stroke-width: 2.4; marker-end: url(#arrow-new); }
+  .new-label { fill: var(--new); font-size: 12px; font-weight: 700; }
+  #arrow path { fill: var(--line); }
+  #arrow-new path { fill: var(--new); }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 16px 0 0; font-size: 0.9rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .sw { width: 16px; height: 16px; border-radius: 4px; border: 2px solid; display: inline-block; }
+  .sw.pub { background: var(--public-fill); border-color: var(--public-stroke); }
+  .sw.app { background: var(--app-fill); border-color: var(--app-stroke); }
+  .sw.data { background: var(--data-fill); border-color: var(--data-stroke); }
+  .sw.new { background: transparent; border-color: var(--new); }
+  h2 { font-size: 1.1rem; margin: 28px 0 8px; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { background: var(--bg); color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }
+  .new-row td:first-child { border-left: 3px solid var(--new); }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>3-Tier VPC Architecture</h1>
+  <p class="sub">ap-southeast-1 &middot; VPC poridhi (10.0.0.0/16) &middot; one NAT gateway per availability zone</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1200 780" role="img" aria-label="VPC with two availability zones. Each zone has a public subnet with its own NAT gateway, a private app subnet and a private data subnet. A shared public route table sends traffic to the internet gateway. Each private route table sends traffic to the NAT gateway in its own zone.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="arrow-new" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker>
+      </defs>
+
+      <!-- VPC -->
+      <rect class="vpc" x="250" y="30" width="920" height="735" rx="14"/>
+      <text class="t-bold" x="270" y="56">VPC poridhi (10.0.0.0/16)</text>
+
+      <!-- AZ 1 -->
+      <rect class="az" x="280" y="75" width="860" height="225" rx="10"/>
+      <text class="t-bold" x="296" y="98">Availability zone 1 &middot; ap-southeast-1a</text>
+
+      <rect class="pub" x="310" y="130" width="230" height="140" rx="10"/>
+      <text class="t-bold" x="425" y="156" text-anchor="middle">Public-subnet-AZ1</text>
+      <text class="t-sm" x="425" y="176" text-anchor="middle">10.0.101.0/24</text>
+      <rect class="nat" x="365" y="200" width="120" height="50" rx="8"/>
+      <text class="t" x="425" y="230" text-anchor="middle">NAT-GW-AZ1</text>
+
+      <rect class="app" x="570" y="130" width="230" height="140" rx="10"/>
+      <text class="t-bold" x="685" y="190" text-anchor="middle">Private-app-subnet-AZ1</text>
+      <text class="t-sm" x="685" y="212" text-anchor="middle">10.0.1.0/24</text>
+
+      <rect class="data" x="830" y="130" width="230" height="140" rx="10"/>
+      <text class="t-bold" x="945" y="190" text-anchor="middle">Private-data-subnet-AZ1</text>
+      <text class="t-sm" x="945" y="212" text-anchor="middle">10.0.3.0/24</text>
+
+      <!-- AZ 2 -->
+      <rect class="az" x="280" y="500" width="860" height="240" rx="10"/>
+      <text class="t-bold" x="296" y="723">Availability zone 2 &middot; ap-southeast-1b</text>
+
+      <rect class="pub" x="310" y="530" width="230" height="140" rx="10"/>
+      <text class="t-bold" x="425" y="556" text-anchor="middle">Public-subnet-AZ2</text>
+      <text class="t-sm" x="425" y="576" text-anchor="middle">10.0.102.0/24</text>
+      <rect class="nat-new" x="365" y="600" width="120" height="50" rx="8"/>
+      <text class="t" x="425" y="630" text-anchor="middle">NAT-GW-AZ2</text>
+      <text class="new-label" x="425" y="592" text-anchor="middle">NEW</text>
+
+      <rect class="app" x="570" y="530" width="230" height="140" rx="10"/>
+      <text class="t-bold" x="685" y="590" text-anchor="middle">Private-app-subnet-AZ2</text>
+      <text class="t-sm" x="685" y="612" text-anchor="middle">10.0.2.0/24</text>
+
+      <rect class="data" x="830" y="530" width="230" height="140" rx="10"/>
+      <text class="t-bold" x="945" y="590" text-anchor="middle">Private-data-subnet-AZ2</text>
+      <text class="t-sm" x="945" y="612" text-anchor="middle">10.0.4.0/24</text>
+
+      <!-- Route tables -->
+      <rect class="rt" x="365" y="385" width="120" height="40" rx="6"/>
+      <text class="t" x="425" y="410" text-anchor="middle">Public-RT</text>
+
+      <rect class="rt" x="620" y="335" width="130" height="40" rx="6"/>
+      <text class="t" x="685" y="360" text-anchor="middle">Private-RT-AZ1</text>
+
+      <rect class="rt" x="620" y="435" width="130" height="40" rx="6"/>
+      <text class="t" x="685" y="460" text-anchor="middle">Private-RT-AZ2</text>
+
+      <!-- Internet + IGW -->
+      <rect class="rt" x="30" y="385" width="100" height="40" rx="20"/>
+      <text class="t" x="80" y="410" text-anchor="middle">Internet</text>
+      <circle class="igw" cx="200" cy="405" r="26"/>
+      <text class="t-sm" x="200" y="452" text-anchor="middle">IGW</text>
+
+      <!-- Links: internet path -->
+      <path class="link" d="M365 405 H228"/>
+      <path class="link" d="M174 405 H132"/>
+
+      <!-- Links: subnets to route tables (association) -->
+      <path class="link" d="M425 270 V385"/>
+      <path class="link" d="M425 530 V425"/>
+      <path class="link" d="M685 270 V335"/>
+      <path class="link" d="M945 270 V355 H750"/>
+      <path class="link" d="M685 530 V475"/>
+      <path class="link" d="M945 530 V455 H750"/>
+
+      <!-- Links: private route tables to their own NAT -->
+      <path class="link" d="M620 355 H555 V225 H487"/>
+      <path class="link-new" d="M620 455 H555 V625 H487"/>
+    </svg>
+  </div>
+
+  <div class="legend">
+    <span><i class="sw pub"></i>Public subnet</span>
+    <span><i class="sw app"></i>Private app subnet</span>
+    <span><i class="sw data"></i>Private data subnet</span>
+    <span><i class="sw new"></i>Changed: NAT gateway in AZ2</span>
+  </div>
+
+  <h2>Routes</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Route table</th><th>Destination</th><th>Target</th><th>Associated subnets</th></tr></thead>
+      <tbody>
+        <tr><td>Public-RT</td><td><code>0.0.0.0/0</code></td><td>Internet gateway</td><td>Public-subnet-AZ1, Public-subnet-AZ2</td></tr>
+        <tr><td>Private-RT-AZ1</td><td><code>0.0.0.0/0</code></td><td>NAT-GW-AZ1</td><td>Private-app-subnet-AZ1, Private-data-subnet-AZ1</td></tr>
+        <tr class="new-row"><td>Private-RT-AZ2</td><td><code>0.0.0.0/0</code></td><td>NAT-GW-AZ2 <strong>(was NAT-GW-AZ1)</strong></td><td>Private-app-subnet-AZ2, Private-data-subnet-AZ2</td></tr>
+        <tr><td>All tables</td><td><code>10.0.0.0/16</code></td><td>local</td><td>Implicit</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Why a NAT gateway per zone</h2>
+  <p>With one NAT in AZ1, a zone 1 outage cuts outbound internet for zone 2 as well. Zone 2 traffic also crosses zones to reach the NAT, which adds data transfer cost. A NAT in each zone keeps each zone independent. Each NAT needs its own Elastic IP and sits in the public subnet of the same zone.</p>
+</main>
+</body>
+</html>
