@@ -11,9 +11,9 @@ variable "public_key_path" {
 }
 
 variable "ami_id" {
-  description = "AMI ID for all instances (Ubuntu, ap-southeast-1)"
+  description = "AMI ID for all instances. Null looks up the latest Ubuntu 24.04 AMI in the current region"
   type        = string
-  default     = "ami-060e277c0d4cce553"
+  default     = null
 }
 
 variable "instance_type" {
