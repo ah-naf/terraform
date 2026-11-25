@@ -78,3 +78,50 @@ module "private_sg" {
     }
   }
 }
+
+# Peering between VPC a (requester) and VPC b (accepter).
+# Same account and region, so auto_accept works.
+resource "aws_vpc_peering_connection" "this" {
+  vpc_id      = module.vpc["a"].vpc_id
+  peer_vpc_id = module.vpc["b"].vpc_id
+  auto_accept = true
+
+  tags = {
+    Name = "vpc-a-to-vpc-b"
+  }
+}
+
+# VPC a: public route table, internet through the IGW, VPC b through peering
+module "route_table_a" {
+  source     = "./route_table"
+  vpc_id     = module.vpc["a"].vpc_id
+  subnet_ids = module.subnet_a.subnet_ids
+
+  route_tables = {
+    public = {
+      name       = "vpc-a-public-rt"
+      subnet_key = "public"
+      routes = [
+        { cidr_block = "0.0.0.0/0", gateway_id = module.vpc["a"].igw_id },
+        { cidr_block = var.vpcs["b"].cidr_block, vpc_peering_connection_id = aws_vpc_peering_connection.this.id }
+      ]
+    }
+  }
+}
+
+# VPC b: private route table, VPC a through peering (return path for replies)
+module "route_table_b" {
+  source     = "./route_table"
+  vpc_id     = module.vpc["b"].vpc_id
+  subnet_ids = module.subnet_b.subnet_ids
+
+  route_tables = {
+    private = {
+      name       = "vpc-b-private-rt"
+      subnet_key = "private"
+      routes = [
+        { cidr_block = var.vpcs["a"].cidr_block, vpc_peering_connection_id = aws_vpc_peering_connection.this.id }
+      ]
+    }
+  }
+}
