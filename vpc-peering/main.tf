@@ -58,6 +58,12 @@ module "bastion_sg" {
       to_port     = -1
       cidr_ipv4   = var.vpcs["b"].cidr_block
     }
+    proxy_from_vpc_b = {
+      description = "Proxy from VPC b"
+      from_port   = 8888
+      to_port     = 8888
+      cidr_ipv4   = var.vpcs["b"].cidr_block
+    }
   }
 }
 
