@@ -17,7 +17,7 @@ module "subnet_a" {
     public = {
       name                    = "vpc-a-public-subnet"
       cidr_block              = "10.0.1.0/24"
-      availability_zone       = "ap-southeast-1a"
+      availability_zone       = "us-east-1a"
       map_public_ip_on_launch = true
     }
   }
@@ -32,7 +32,7 @@ module "subnet_b" {
     private = {
       name                    = "vpc-b-private-subnet"
       cidr_block              = "10.1.1.0/24"
-      availability_zone       = "ap-southeast-1a"
+      availability_zone       = "us-east-1a"
       map_public_ip_on_launch = false
     }
   }
@@ -50,6 +50,13 @@ module "bastion_sg" {
       from_port   = 22
       to_port     = 22
       cidr_ipv4   = var.allowed_ssh_cidr
+    }
+    icmp_from_vpc_b = {
+      description = "Ping from VPC b"
+      ip_protocol = "icmp"
+      from_port   = -1
+      to_port     = -1
+      cidr_ipv4   = var.vpcs["b"].cidr_block
     }
   }
 }
@@ -122,6 +129,27 @@ module "route_table_b" {
       routes = [
         { cidr_block = var.vpcs["a"].cidr_block, vpc_peering_connection_id = aws_vpc_peering_connection.this.id }
       ]
+    }
+  }
+}
+
+# One module call creates the key pair once and both instances.
+# Each instance lands in its own VPC, chosen by its subnet.
+module "ec2" {
+  source          = "./ec2"
+  public_key_path = "${path.root}/bastion-key.pub"
+
+  instances = {
+    bastion = {
+      name                        = "vpc-a-bastion"
+      subnet_id                   = module.subnet_a.subnet_ids["public"]
+      security_group_ids          = [module.bastion_sg.sg_id]
+      associate_public_ip_address = true
+    }
+    private = {
+      name               = "vpc-b-private"
+      subnet_id          = module.subnet_b.subnet_ids["private"]
+      security_group_ids = [module.private_sg.sg_id]
     }
   }
 }
