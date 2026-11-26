@@ -47,11 +47,23 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-resource "aws_instance" "web_server" {
-  count                       = 2
+# Four servers in two groups. Each group gets its own target group.
+# subnet_index picks the public subnet (and so the AZ), spreading each group over both AZs.
+locals {
+  servers = {
+    web-1 = { group = "web", subnet_index = 0 }
+    web-2 = { group = "web", subnet_index = 1 }
+    api-1 = { group = "api", subnet_index = 0 }
+    api-2 = { group = "api", subnet_index = 1 }
+  }
+}
+
+resource "aws_instance" "this" {
+  for_each = local.servers
+
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = "t2.micro"
-  subnet_id                   = aws_subnet.public_subnets[count.index].id
+  subnet_id                   = aws_subnet.public_subnets[each.value.subnet_index].id
   vpc_security_group_ids      = [aws_security_group.ec2_sg.id]
   key_name                    = aws_key_pair.web_key.key_name
   associate_public_ip_address = true
@@ -62,11 +74,13 @@ resource "aws_instance" "web_server" {
               apt-get install apache2 -y
               HOSTNAME=$(hostname)
               IP_ADDRESS=$(hostname -I | cut -d' ' -f1)
-              echo "<html><head><title>Server Details</title></head><body><h1>Server Details</h1><p><strong>Hostname:</strong> $HOSTNAME</p><p><strong>IP Address:</strong> $IP_ADDRESS</p></body></html>" | tee /var/www/html/index.html
+              PAGE="<html><head><title>Server Details</title></head><body><h1>Server Details</h1><p><strong>Group:</strong> ${each.value.group}</p><p><strong>Hostname:</strong> $HOSTNAME</p><p><strong>IP Address:</strong> $IP_ADDRESS</p></body></html>"
+              echo "$PAGE" | tee /var/www/html/index.html
               systemctl restart apache2
               EOF
 
   tags = {
-    Name = "WebServer-${count.index + 1}"
+    Name  = each.key
+    Group = each.value.group
   }
 }
