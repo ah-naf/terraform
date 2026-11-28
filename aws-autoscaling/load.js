@@ -1,26 +1,18 @@
-const url = 'http://autoscaling-alb-2032883031.us-east-1.elb.amazonaws.com/';
-const numberOfRequests = 10;
-const delayMs = 1000;
+const url = process.env.URL || 'http://autoscaling-alb-2032883031.us-east-1.elb.amazonaws.com/';
+const concurrency = 200;
+const durationMs = 10 * 60 * 1000;
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const end = Date.now() + durationMs;
+let ok = 0, fail = 0;
 
-async function checkEndpoint() {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    console.log(`Status: ${response.status}`);
-  } catch (error) {
-    console.error(`Request failed: ${error.message}`);
+async function worker() {
+  while (Date.now() < end) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      r.ok ? ok++ : fail++;
+    } catch { fail++; }
   }
 }
 
-async function runChecks() {
-  for (let i = 0; i < numberOfRequests; i++) {
-    await checkEndpoint();
-    if (i < numberOfRequests - 1) {
-      await delay(delayMs);
-    }
-  }
-  console.log('Endpoint checks finished.');
-}
-
-runChecks();
+setInterval(() => console.log(`ok=${ok} fail=${fail}`), 5000).unref();
+Promise.all(Array.from({ length: concurrency }, worker)).then(() => console.log(`done ok=${ok} fail=${fail}`));

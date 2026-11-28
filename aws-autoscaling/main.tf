@@ -192,3 +192,16 @@ resource "aws_autoscaling_group" "main" {
     propagate_at_launch = true
   }
 }
+resource "aws_autoscaling_policy" "alb_requests" {
+  name                   = "Target Tracking Policy"
+  autoscaling_group_name = aws_autoscaling_group.main.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label         = "${aws_lb.main_alb.arn_suffix}/${aws_lb_target_group.main_tg.arn_suffix}"
+    }
+    target_value = 50
+  }
+}
